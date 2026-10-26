@@ -14,6 +14,8 @@ import { badgeSupported, enableBadge, updateBadge, downloadReminder } from './re
 // --- Démarrage ---------------------------------------------------------------
 
 async function init() {
+  // En premier : même si la suite plantait, une version corrigée pourra s'installer.
+  registerServiceWorker();
   state.settings = await col.loadSettings();
   state.goHome = showHome;
   try { state.collapsed = new Set(JSON.parse(localStorage.getItem('collapsed') || '[]')); } catch { /* stockage indisponible */ }
@@ -28,9 +30,9 @@ async function init() {
   bindDragDrop();
   bindInstall();
   unlockOnFirstTouch();
+  window.__motoReady = true; // les boutons sont prêts (voir le filet de sécurité dans index.html)
   await showHome();
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
   navigator.storage?.persist?.().catch(() => {});
 
   // Ouverture d'un .apkg depuis le système (PWA installée sur ordinateur).
@@ -44,6 +46,34 @@ async function init() {
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible' && !$('#home').hidden) renderDeckList();
   });
+}
+
+// Mises à jour : quand une nouvelle version s'installe, la page se recharge pour
+// l'utiliser en entier (pendant une révision, on attend le retour à l'accueil).
+function registerServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+  const hadController = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register('sw.js').then((reg) => {
+    // Une appli installée sur iPad reprend souvent sans recharger : on vérifie au retour.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') reg.update().catch(() => {});
+    });
+  }).catch(() => {});
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || state.updateReady) return;
+    state.updateReady = true;
+    reloadIfIdle();
+  });
+}
+
+function reloadIfIdle() {
+  if (state.updateReady && !$('#home').hidden && !document.querySelector('dialog[open]')) location.reload();
+}
+
+async function appVersion() {
+  const keys = await caches?.keys?.().catch(() => []) || [];
+  const key = keys.find((k) => k.startsWith('moto-'));
+  return key ? key.slice(5) : 'inconnue';
 }
 
 function applyTheme() {
@@ -76,6 +106,7 @@ function bindHome() {
 async function showHome() {
   state.session = null;
   showView('home');
+  reloadIfIdle();
   await renderDeckList();
 }
 
@@ -362,9 +393,8 @@ function bindSettings() {
     $('#storage-info').textContent = '';
     dlg.showModal();
     const est = await navigator.storage?.estimate?.().catch(() => null);
-    if (est?.usage != null) {
-      $('#storage-info').textContent = `Espace utilisé sur l’appareil : ${(est.usage / 1048576).toFixed(1)} Mo.`;
-    }
+    const usage = est?.usage != null ? `Espace utilisé sur l’appareil : ${(est.usage / 1048576).toFixed(1)} Mo. ` : '';
+    $('#storage-info').textContent = `${usage}Version : ${await appVersion()}.`;
   };
   form.addEventListener('change', () => {
     const fsrs = form.algorithm.value === 'fsrs';

@@ -17,8 +17,54 @@
   <script src="vendor/fzstd.js" defer></script>
   <script src="vendor/sql-wasm.js" defer></script>
   <script type="module" src="js/app.js"></script>
+  <script>
+    // Filet de sécurité (volontairement en JavaScript « ancien ») : affiche les erreurs
+    // et propose de réparer si l'application ne démarre pas. « Réparer » vide
+    // seulement les fichiers de l'appli gardés pour le hors ligne, jamais les cartes.
+    (function () {
+      var errors = [];
+      function banner() {
+        var el = document.getElementById('error-banner');
+        if (!el) return;
+        el.hidden = false;
+        document.getElementById('error-text').textContent = errors.slice(-3).join(' · ') || 'L’application n’a pas démarré.';
+      }
+      function record(msg) {
+        errors.push(String(msg || 'erreur inconnue').slice(0, 200));
+        if (window.__motoReady) {
+          var t = document.getElementById('toast');
+          if (t) { t.textContent = 'Erreur : ' + errors[errors.length - 1]; t.hidden = false; }
+        } else {
+          banner();
+        }
+      }
+      window.addEventListener('error', function (e) { record(e.message || (e.target && e.target.src ? 'Fichier introuvable : ' + e.target.src : '')); }, true);
+      window.addEventListener('unhandledrejection', function (e) { record(e.reason && (e.reason.message || e.reason)); });
+      window.addEventListener('load', function () {
+        setTimeout(function () { if (!window.__motoReady) banner(); }, 6000);
+      });
+      window.motoRepair = function () {
+        var jobs = [];
+        if (navigator.serviceWorker) {
+          jobs.push(navigator.serviceWorker.getRegistrations().then(function (rs) {
+            return Promise.all(rs.map(function (r) { return r.unregister(); }));
+          }));
+        }
+        if (window.caches) {
+          jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }));
+        }
+        Promise.all(jobs).then(function () { location.reload(); }, function () { location.reload(); });
+      };
+    })();
+  </script>
 </head>
 <body>
+  <div id="error-banner" class="error-banner" hidden>
+    <strong>Un problème empêche Moto de fonctionner.</strong>
+    <span id="error-text"></span>
+    <button type="button" class="btn primary" onclick="motoRepair()">Réparer</button>
+    <small>Vos cartes et votre progression ne seront pas effacées.</small>
+  </div>
   <!-- Accueil : liste des paquets -->
   <section id="home" class="view">
     <header class="topbar">

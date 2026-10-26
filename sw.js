@@ -1,7 +1,8 @@
 // Service worker : l'application démarre instantanément depuis le cache, même
-// hors ligne, et les mises à jour sont téléchargées en arrière-plan (elles
-// s'appliquent à l'ouverture suivante).
-const CACHE = 'moto-v3';
+// hors ligne. Chaque version est mise en cache d'un bloc (jamais un mélange de
+// fichiers anciens et nouveaux) ; le déploiement remplace « dev » ci-dessous par
+// l'identifiant du commit, ce qui déclenche la mise à jour sur les appareils.
+const CACHE = 'moto-dev';
 const ASSETS = [
   './',
   'index.html',
@@ -47,23 +48,20 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Cache d'abord, puis mise à jour du cache en arrière-plan.
+// Cache d'abord ; le réseau ne sert que pour ce qui n'est pas en cache.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const cached = await cache.match(req, { ignoreSearch: true });
-    const network = fetch(req, { cache: 'no-cache' })
-      .then((res) => {
-        if (res.ok) cache.put(req, res.clone());
-        return res;
-      })
-      .catch(() => cached);
-    if (cached) {
-      e.waitUntil(network);
-      return cached;
+    if (cached) return cached;
+    try {
+      const res = await fetch(req);
+      if (res.ok) cache.put(req, res.clone());
+      return res;
+    } catch {
+      return Response.error();
     }
-    return network;
   })());
 });
