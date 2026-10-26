@@ -8,7 +8,7 @@ import { bindStudy, startStudy, startCustom } from './study.js';
 import { bindEditor, openEditor } from './editor.js';
 import { bindBrowse, openBrowser } from './browse.js';
 import { bindStats, openStats } from './stats.js';
-import { TTS_LANGUAGES, ttsAvailable } from './tts.js';
+import { TTS_LANGUAGES, ttsAvailable, unlockOnFirstTouch } from './tts.js';
 import { badgeSupported, enableBadge, updateBadge, downloadReminder } from './reminders.js';
 
 // --- Démarrage ---------------------------------------------------------------
@@ -27,6 +27,7 @@ async function init() {
   bindDeckDialogs();
   bindDragDrop();
   bindInstall();
+  unlockOnFirstTouch();
   await showHome();
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -293,7 +294,7 @@ async function importFiles(files) {
     }
   } catch (err) {
     console.error(err);
-    toast(`Échec de l’import : ${err.message || err}`, 7000);
+    toast(`Échec de l’import : ${err?.message || err || 'erreur inconnue'}`, 7000);
   } finally {
     dlg.close();
     if (!$('#home').hidden) renderDeckList();

@@ -41,10 +41,19 @@ export function bindEditor() {
     }
   };
   for (const b of $$('#editor .ed-toolbar button')) {
-    // Garde la sélection dans le champ quand on touche un bouton de la barre.
-    b.addEventListener('pointerdown', (e) => e.preventDefault());
-    b.addEventListener('mousedown', (e) => e.preventDefault());
-    b.onclick = () => command(b.dataset.cmd);
+    if (b.dataset.cmd === 'image') {
+      // Le sélecteur de fichier doit s'ouvrir sur un vrai « clic ».
+      b.onclick = () => $('#ed-image').click();
+      continue;
+    }
+    // On agit dès l'appui, en l'annulant, pour que le champ garde le focus et la
+    // sélection. Sur iPad, Safari n'envoie alors plus de « click » : il ne sert
+    // qu'au clavier (detail === 0).
+    b.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      command(b.dataset.cmd);
+    });
+    b.addEventListener('click', (e) => { if (e.detail === 0) command(b.dataset.cmd); });
   }
   $('#ed-image').onchange = () => insertImage();
   document.addEventListener('selectionchange', () => {
@@ -203,7 +212,6 @@ function restoreSelection() {
 }
 
 function command(cmd) {
-  if (cmd === 'image') { $('#ed-image').click(); return; }
   restoreSelection();
   if (cmd === 'cloze') {
     const all = currentValues().join(' ');

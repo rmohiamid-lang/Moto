@@ -65,8 +65,8 @@ export async function importPackage(file, settings, onProgress = () => {}) {
   const total = pkg.media.length;
   for (let i = 0; i < total; i += 50) {
     const batch = pkg.media.slice(i, i + 50);
-    const blobs = await Promise.all(batch.map(async (m) => ({ name: m.name, blob: await pkg.loadMedia(m) })));
-    await db.putMany('media', blobs);
+    const records = await Promise.all(batch.map(async (m) => mediaRecord(m.name, await pkg.loadMedia(m))));
+    await db.putMany('media', records);
     onProgress(`Import des médias (${Math.min(i + 50, total)}/${total})…`, 0.3 + 0.7 * ((i + 50) / total));
   }
   mediaCache.clear();
@@ -161,6 +161,16 @@ export function doneToday(counts, deckIds, kind) {
 
 const mediaCache = new Map();
 
+// Les médias sont stockés en ArrayBuffer : certains Safari refusent les Blob dans
+// IndexedDB. Les anciens enregistrements { blob } restent lisibles.
+async function mediaRecord(name, blob) {
+  return { name, type: blob.type, data: await blob.arrayBuffer() };
+}
+
+function recordBlob(rec) {
+  return rec.blob || new Blob([rec.data], { type: rec.type || '' });
+}
+
 async function mediaDataUrl(name) {
   if (mediaCache.has(name)) return mediaCache.get(name);
   const rec = await db.get('media', name);
@@ -170,7 +180,7 @@ async function mediaDataUrl(name) {
       const r = new FileReader();
       r.onload = () => resolve(r.result);
       r.onerror = () => resolve(null);
-      r.readAsDataURL(rec.blob);
+      r.readAsDataURL(recordBlob(rec));
     });
   }
   if (mediaCache.size > 200) mediaCache.delete(mediaCache.keys().next().value);
@@ -299,13 +309,13 @@ export async function saveNote(note, notetype, deckId, { moveCards = false } = {
 // Enregistre une image ajoutée depuis l'éditeur et renvoie son nom de média.
 export async function addMedia(blob, ext) {
   const name = `moto-${newId()}.${ext}`;
-  await db.put('media', { name, blob });
+  await db.put('media', await mediaRecord(name, blob));
   return name;
 }
 
 export async function mediaObjectUrl(name) {
   const rec = await db.get('media', name);
-  return rec ? URL.createObjectURL(rec.blob) : null;
+  return rec ? URL.createObjectURL(recordBlob(rec)) : null;
 }
 
 // --- Paquet d'exemple ---------------------------------------------------------

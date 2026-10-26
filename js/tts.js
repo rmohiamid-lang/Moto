@@ -45,11 +45,21 @@ function clean(el) {
   return el.textContent.replace(/\s+/g, ' ').trim();
 }
 
-export function speak(segments) {
-  if (!supported) return;
-  speechSynthesis.cancel();
-  const voices = speechSynthesis.getVoices();
-  for (const { text, lang } of segments) {
+// Garde une référence aux phrases en cours : sinon Safari peut les libérer et
+// couper la lecture.
+let utterances = [];
+
+// Renvoie false s'il n'y a rien à lire. onError(message) est appelé si la voix échoue.
+export function speak(segments, onError = () => {}) {
+  if (!supported || !segments.length) return false;
+  const synth = speechSynthesis;
+  // Sur iPad, un speak() juste après cancel() est souvent ignoré : on n'arrête que
+  // ce qui est réellement en cours, et on attend un instant avant de relancer.
+  const busy = synth.speaking || synth.pending;
+  if (busy) synth.cancel();
+  if (synth.paused) synth.resume();
+  const voices = synth.getVoices();
+  utterances = segments.map(({ text, lang }) => {
     const u = new SpeechSynthesisUtterance(text);
     if (lang) {
       u.lang = lang;
@@ -57,10 +67,28 @@ export function speak(segments) {
         || voices.find((v) => v.lang.startsWith(lang.split('-')[0]));
       if (voice) u.voice = voice;
     }
-    speechSynthesis.speak(u);
-  }
+    u.onerror = (e) => {
+      if (e.error !== 'interrupted' && e.error !== 'canceled') onError(e.error || 'erreur inconnue');
+    };
+    return u;
+  });
+  const start = () => { for (const u of utterances) synth.speak(u); };
+  if (busy) setTimeout(start, 120); else start();
+  return true;
 }
 
 export function stopSpeaking() {
-  if (supported) speechSynthesis.cancel();
+  if (supported && (speechSynthesis.speaking || speechSynthesis.pending)) speechSynthesis.cancel();
+}
+
+// Sur iPad, la première lecture doit venir d'un toucher : on « déverrouille » la
+// voix au premier toucher pour que la lecture automatique fonctionne ensuite.
+export function unlockOnFirstTouch() {
+  if (!supported) return;
+  const unlock = () => {
+    const u = new SpeechSynthesisUtterance(' ');
+    u.volume = 0;
+    speechSynthesis.speak(u);
+  };
+  document.addEventListener('pointerup', unlock, { once: true, capture: true });
 }

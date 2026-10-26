@@ -63,8 +63,8 @@ export async function putMany(name, values) {
     const s = tx.objectStore(name);
     for (const v of values) s.put(v);
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error);
-    tx.onabort = () => reject(tx.error);
+    tx.onerror = (e) => reject(e.target.error || tx.error || new Error('Erreur d’enregistrement'));
+    tx.onabort = () => reject(tx.error || new Error('Enregistrement annulé'));
   });
 }
 

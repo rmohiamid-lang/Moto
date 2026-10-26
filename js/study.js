@@ -114,7 +114,7 @@ export function bindStudy() {
   $('#btn-undo').onclick = () => undo();
   $('#btn-suspend').onclick = () => suspendCurrent();
   $('#btn-edit').onclick = () => editCurrent();
-  $('#btn-speak').onclick = () => speakCurrent();
+  $('#btn-speak').onclick = () => speakCurrent(true);
   $('#btn-speak').hidden = !ttsAvailable();
   for (const b of $$('[data-rating]')) b.onclick = () => answer(Number(b.dataset.rating));
   addEventListener('keydown', (e) => {
@@ -150,7 +150,7 @@ function handleKey(key) {
   if (k === 'u') { undo(); return true; }
   if (k === 's') { suspendCurrent(); return true; }
   if (k === 'e') { editCurrent(); return true; }
-  if (k === 't') { speakCurrent(); return true; }
+  if (k === 't') { speakCurrent(true); return true; }
   return false;
 }
 
@@ -417,12 +417,19 @@ async function suspendCurrent() {
   await nextCard();
 }
 
-function speakCurrent() {
+// manual = true quand l'utilisateur a demandé la lecture (bouton ou touche T).
+function speakCurrent(manual = false) {
   const s = state.session;
   if (!s?.current) return;
   const deck = s.decks.get(s.current.did);
   const lang = deckSetting(deck, 'ttsLang');
-  speak(ttsSegments(s.revealed ? s.rendered.answer : s.rendered.question, s.revealed ? 'a' : 'q', lang));
+  const segments = ttsSegments(s.revealed ? s.rendered.answer : s.rendered.question, s.revealed ? 'a' : 'q', lang);
+  const ok = speak(segments, (err) => {
+    toast(err === 'not-allowed'
+      ? 'Touchez 🔊 pour lancer la voix (l’iPad demande un premier toucher).'
+      : `La voix n’a pas pu lire la carte (${err}). Vérifiez le volume et que le mode silencieux est désactivé.`, 6000);
+  });
+  if (!ok && manual) toast('Rien à lire sur cette face de la carte.');
 }
 
 function editCurrent() {

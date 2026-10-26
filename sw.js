@@ -1,7 +1,7 @@
 // Service worker : l'application démarre instantanément depuis le cache, même
 // hors ligne, et les mises à jour sont téléchargées en arrière-plan (elles
 // s'appliquent à l'ouverture suivante).
-const CACHE = 'moto-v2';
+const CACHE = 'moto-v3';
 const ASSETS = [
   './',
   'index.html',
