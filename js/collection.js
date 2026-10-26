@@ -2,6 +2,7 @@
 import * as db from './db.js';
 import { parsePackage } from './apkg.js';
 import { DEFAULT_SETTINGS, dayNumber } from './scheduler.js';
+import { renderCard, clozeOrdinals } from './template.js';
 
 export async function loadSettings() {
   const saved = await db.get('kv', 'settings');
@@ -98,12 +99,36 @@ export function buildTree(decks) {
 
 export async function deleteDecks(deckIds) {
   const ids = new Set(deckIds);
-  const cards = (await db.getAll('cards')).filter((c) => ids.has(c.did));
-  await db.deleteMany('cards', cards.map((c) => c.id));
-  const remainingNids = new Set((await db.getAll('cards')).map((c) => c.nid));
-  const orphanNotes = [...new Set(cards.map((c) => c.nid))].filter((nid) => !remainingNids.has(nid));
-  await db.deleteMany('notes', orphanNotes);
+  await deleteCards((await db.getAll('cards')).filter((c) => ids.has(c.did)).map((c) => c.id));
   await db.deleteMany('decks', deckIds);
+}
+
+// Supprime des cartes, et les notes qui n'ont plus aucune carte.
+export async function deleteCards(cardIds) {
+  const ids = new Set(cardIds);
+  const all = await db.getAll('cards');
+  const nids = new Set(all.filter((c) => ids.has(c.id)).map((c) => c.nid));
+  await db.deleteMany('cards', cardIds);
+  const remaining = new Set(all.filter((c) => !ids.has(c.id)).map((c) => c.nid));
+  await db.deleteMany('notes', [...nids].filter((nid) => !remaining.has(nid)));
+}
+
+// Renvoie l'id du paquet portant ce nom, en le créant (avec ses parents) au besoin.
+export async function ensureDeck(name) {
+  const decks = await db.getAll('decks');
+  const parts = name.split('::');
+  let id = null;
+  for (let i = 1; i <= parts.length; i++) {
+    const n = parts.slice(0, i).join('::');
+    let d = decks.find((x) => x.name === n);
+    if (!d) {
+      d = { id: newId(), name: n };
+      decks.push(d);
+      await db.put('decks', d);
+    }
+    id = d.id;
+  }
+  return id;
 }
 
 // --- Compteurs du jour --------------------------------------------------------
@@ -111,7 +136,15 @@ export async function deleteDecks(deckIds) {
 export async function loadDayCounts(settings) {
   const today = dayNumber(Date.now(), settings);
   const saved = await db.get('kv', 'dayCounts');
-  return saved && saved.day === today ? saved : { day: today, decks: {} };
+  return saved && saved.day === today ? saved : { day: today, decks: {}, extra: {} };
+}
+
+// Révision personnalisée : augmente la limite du jour d'un paquet.
+export async function addExtraLimit(counts, deckName, kind, n) {
+  counts.extra ??= {};
+  const e = (counts.extra[deckName] ??= { fresh: 0, review: 0 });
+  e[kind] += n;
+  await db.put('kv', counts, 'dayCounts');
 }
 
 export async function bumpDayCount(counts, did, kind, delta = 1) {
@@ -189,50 +222,108 @@ export async function inlineMedia(html) {
     });
 }
 
+// --- Notes et cartes créées dans l'application -----------------------------------
+
+let lastId = 0;
+export function newId() {
+  lastId = Math.max(Date.now(), lastId + 1);
+  return lastId;
+}
+
+const BUILTIN_CSS = `.card { font-family: system-ui, -apple-system, sans-serif; font-size: 26px; text-align: center; }
+.cloze { font-weight: bold; color: #2563eb; }
+.nightMode .cloze { color: #7cb4ff; }`;
+
+export const BUILTIN_NOTETYPES = [
+  {
+    id: 1000000000001, name: 'Basique (Moto)', type: 0, fields: ['Recto', 'Verso'], css: BUILTIN_CSS,
+    templates: [{ name: 'Carte 1', qfmt: '{{Recto}}', afmt: '{{FrontSide}}<hr id=answer>{{Verso}}' }],
+  },
+  {
+    id: 1000000000003, name: 'Basique et inversée (Moto)', type: 0, fields: ['Recto', 'Verso'], css: BUILTIN_CSS,
+    templates: [
+      { name: 'Carte 1', qfmt: '{{Recto}}', afmt: '{{FrontSide}}<hr id=answer>{{Verso}}' },
+      { name: 'Carte 2', qfmt: '{{Verso}}', afmt: '{{FrontSide}}<hr id=answer>{{Recto}}' },
+    ],
+  },
+  {
+    id: 1000000000004, name: 'Réponse à taper (Moto)', type: 0, fields: ['Recto', 'Verso'], css: BUILTIN_CSS,
+    templates: [{ name: 'Carte 1', qfmt: '{{Recto}}<br><br>{{type:Verso}}', afmt: '{{Recto}}<hr id=answer>{{type:Verso}}' }],
+  },
+  {
+    id: 1000000000002, name: 'Texte à trous (Moto)', type: 1, fields: ['Texte', 'Remarque'], css: BUILTIN_CSS,
+    templates: [{ name: 'Trou', qfmt: '{{cloze:Texte}}', afmt: '{{cloze:Texte}}<br><small>{{Remarque}}</small>' }],
+  },
+];
+
+export async function ensureBuiltinNotetypes() {
+  const existing = new Set(await db.getAllKeys('notetypes'));
+  const missing = BUILTIN_NOTETYPES.filter((nt) => !existing.has(nt.id));
+  if (missing.length) await db.putMany('notetypes', missing);
+}
+
+async function maxNewPosition() {
+  let max = 0;
+  for (const c of await db.getAll('cards')) if (c.state === 0) max = Math.max(max, c.due);
+  return max;
+}
+
+// Numéros (ord) des cartes qu'une note doit produire, comme Anki : une carte par
+// modèle dont la question n'est pas vide, ou une par trou pour un texte à trous.
+export function cardOrdsFor(notetype, note) {
+  if (notetype.type === 1) return clozeOrdinals(note.fields.join(' ')).map((n) => n - 1).sort((a, b) => a - b);
+  const blank = { ...note, fields: note.fields.map(() => '') };
+  return notetype.templates.map((t, ord) => ord).filter((ord) => {
+    const q = renderCard({ notetype, note, card: { ord }, deckName: '' }).question;
+    return q !== renderCard({ notetype, note: blank, card: { ord }, deckName: '' }).question;
+  });
+}
+
+// Enregistre une note (nouvelle ou modifiée) et crée les cartes qui manquent.
+// Renvoie le nombre de cartes créées.
+export async function saveNote(note, notetype, deckId, { moveCards = false } = {}) {
+  if (!note.id) note.id = newId();
+  await db.put('notes', note);
+  const existing = await db.getAllByIndex('cards', 'nid', note.id);
+  const have = new Set(existing.map((c) => c.ord));
+  let pos = await maxNewPosition();
+  const created = cardOrdsFor(notetype, note).filter((ord) => !have.has(ord)).map((ord) => ({
+    id: newId(), nid: note.id, did: deckId, ord, state: 0, due: ++pos,
+    ivl: 0, ease: 0, step: 0, reps: 0, lapses: 0, suspended: false,
+  }));
+  const moved = moveCards ? existing.filter((c) => c.did !== deckId).map((c) => ({ ...c, did: deckId })) : [];
+  await db.putMany('cards', [...created, ...moved]);
+  return created.length;
+}
+
+// Enregistre une image ajoutée depuis l'éditeur et renvoie son nom de média.
+export async function addMedia(blob, ext) {
+  const name = `moto-${newId()}.${ext}`;
+  await db.put('media', { name, blob });
+  return name;
+}
+
+export async function mediaObjectUrl(name) {
+  const rec = await db.get('media', name);
+  return rec ? URL.createObjectURL(rec.blob) : null;
+}
+
 // --- Paquet d'exemple ---------------------------------------------------------
 
 export async function createSampleDeck() {
-  const now = Date.now();
-  const deck = { id: now, name: 'Exemple::Capitales' };
-  const parent = { id: now + 1, name: 'Exemple' };
   const existing = await db.getAll('decks');
-  if (existing.some((d) => d.name === deck.name)) return;
-  const basic = {
-    id: 1000000000001, name: 'Basique (Moto)', type: 0, fields: ['Recto', 'Verso'],
-    css: '.card { font-family: system-ui, sans-serif; font-size: 26px; text-align: center; }',
-    templates: [{ name: 'Carte 1', qfmt: '{{Recto}}', afmt: '{{FrontSide}}<hr id=answer>{{Verso}}' }],
-  };
-  const cloze = {
-    id: 1000000000002, name: 'Texte à trous (Moto)', type: 1, fields: ['Texte', 'Remarque'],
-    css: '.card { font-family: system-ui, sans-serif; font-size: 24px; text-align: center; } .cloze { font-weight: bold; color: #2563eb; } .nightMode .cloze { color: #7cb4ff; }',
-    templates: [{ name: 'Trou', qfmt: '{{cloze:Texte}}', afmt: '{{cloze:Texte}}<br><small>{{Remarque}}</small>' }],
-  };
+  if (existing.some((d) => d.name === 'Exemple::Capitales')) return;
+  await ensureBuiltinNotetypes();
+  const [basic, , , cloze] = BUILTIN_NOTETYPES;
+  const did = await ensureDeck('Exemple::Capitales');
   const pairs = [
     ['Capitale de l’Italie ?', 'Rome'], ['Capitale du Japon ?', 'Tokyo'],
     ['Capitale du Canada ?', 'Ottawa'], ['Capitale de l’Australie ?', 'Canberra'],
     ['Capitale du Maroc ?', 'Rabat'], ['Capitale du Brésil ?', 'Brasília'],
   ];
-  const notes = [], cards = [];
-  let maxNewPos = 0;
-  for (const c of await db.getAll('cards')) if (c.state === 0) maxNewPos = Math.max(maxNewPos, c.due);
-  const addCard = (nid, ord) => cards.push({
-    id: now + 100 + cards.length, nid, did: deck.id, ord, state: 0, due: ++maxNewPos,
-    ivl: 0, ease: 0, step: 0, reps: 0, lapses: 0, suspended: false,
-  });
-  pairs.forEach(([q, a], i) => {
-    const nid = now + 10 + i;
-    notes.push({ id: nid, mid: basic.id, fields: [q, a], tags: ['exemple'] });
-    addCard(nid, 0);
-  });
-  const clozeNid = now + 50;
-  notes.push({
-    id: clozeNid, mid: cloze.id, tags: ['exemple'],
+  for (const [q, a] of pairs) await saveNote({ mid: basic.id, fields: [q, a], tags: ['exemple'] }, basic, did);
+  await saveNote({
+    mid: cloze.id, tags: ['exemple'],
     fields: ['La tour Eiffel se trouve à {{c1::Paris}} et mesure environ {{c2::330::nombre}} mètres.', 'Inaugurée en 1889'],
-  });
-  addCard(clozeNid, 0);
-  addCard(clozeNid, 1);
-  await db.putMany('decks', [parent, deck]);
-  await db.putMany('notetypes', [basic, cloze]);
-  await db.putMany('notes', notes);
-  await db.putMany('cards', cards);
+  }, cloze, did);
 }

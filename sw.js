@@ -1,5 +1,7 @@
-// Service worker : met l'application en cache pour un fonctionnement hors ligne.
-const CACHE = 'moto-v1';
+// Service worker : l'application démarre instantanément depuis le cache, même
+// hors ligne, et les mises à jour sont téléchargées en arrière-plan (elles
+// s'appliquent à l'ouverture suivante).
+const CACHE = 'moto-v2';
 const ASSETS = [
   './',
   'index.html',
@@ -7,10 +9,18 @@ const ASSETS = [
   'manifest.webmanifest',
   'js/app.js',
   'js/apkg.js',
+  'js/browse.js',
   'js/collection.js',
   'js/db.js',
+  'js/editor.js',
+  'js/reminders.js',
   'js/scheduler.js',
+  'js/state.js',
+  'js/stats.js',
+  'js/study.js',
   'js/template.js',
+  'js/tts.js',
+  'js/ui.js',
   'vendor/jszip.min.js',
   'vendor/fzstd.js',
   'vendor/sql-wasm.js',
@@ -22,7 +32,11 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(ASSETS)).then(() => self.skipWaiting()));
+  e.waitUntil(
+    caches.open(CACHE)
+      .then((c) => c.addAll(ASSETS.map((url) => new Request(url, { cache: 'reload' }))))
+      .then(() => self.skipWaiting()),
+  );
 });
 
 self.addEventListener('activate', (e) => {
@@ -33,19 +47,23 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// Réseau d'abord (pour recevoir les mises à jour), cache si hors ligne.
+// Cache d'abord, puis mise à jour du cache en arrière-plan.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET' || new URL(req.url).origin !== self.location.origin) return;
-  e.respondWith(
-    fetch(req)
+  e.respondWith((async () => {
+    const cache = await caches.open(CACHE);
+    const cached = await cache.match(req, { ignoreSearch: true });
+    const network = fetch(req, { cache: 'no-cache' })
       .then((res) => {
-        if (res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then((c) => c.put(req, copy));
-        }
+        if (res.ok) cache.put(req, res.clone());
         return res;
       })
-      .catch(() => caches.match(req, { ignoreSearch: true })),
-  );
+      .catch(() => cached);
+    if (cached) {
+      e.waitUntil(network);
+      return cached;
+    }
+    return network;
+  })());
 });

@@ -9,20 +9,34 @@ s'installe comme une vraie application (icône sur l'écran d'accueil, plein éc
 
 ## Fonctionnalités
 
-- Import des paquets Anki `.apkg` / `.colpkg` — ancien format (`collection.anki2`, `.anki21`)
-  et nouveau format compressé (`collection.anki21b`, Anki 2.1.50+)
-- Images, sons (`[sound:…]`) et polices des paquets
-- Rendu fidèle des modèles Anki : champs, sections `{{#…}}` / `{{^…}}`, `{{FrontSide}}`,
-  textes à trous (`{{cloze:…}}`, y compris imbriqués et avec indice), `{{type:…}}` (réponse à
-  saisir avec correction), `{{hint:…}}`, furigana, CSS du modèle, mode sombre
-- Répétition espacée de type SM-2 (comme Anki) : boutons *À revoir / Difficile / Correct /
-  Facile* avec l'intervalle suivant affiché, étapes d'apprentissage, limites quotidiennes
-- La progression déjà présente dans un paquet exporté « avec planification » est conservée
-- Sous-paquets (`Parent::Enfant`), renommage, suppression, annulation de la dernière réponse,
-  suspension d'une carte
+- **Import** des paquets Anki `.apkg` / `.colpkg` — ancien format (`collection.anki2`, `.anki21`)
+  et nouveau format compressé (`collection.anki21b`, Anki 2.1.50+), avec images, sons et polices
+- **Rendu fidèle** des modèles Anki : champs, sections `{{#…}}` / `{{^…}}`, `{{FrontSide}}`,
+  textes à trous (y compris imbriqués et avec indice), réponse à taper avec correction,
+  `{{hint:…}}`, furigana, CSS du modèle, mode sombre
+- **Répétition espacée** au choix : **FSRS** (l'algorithme des versions récentes d'Anki, avec
+  rétention visée réglable) ou SM-2 ; étapes d'apprentissage ; la progression d'un paquet exporté
+  « avec planification » est conservée
+- **Limites par paquet** (nouvelles cartes et révisions par jour), appliquées aussi aux parents
+- **Révision personnalisée** : nouvelles cartes en plus, limite de révisions augmentée, cartes
+  oubliées aujourd'hui, révision en avance, étude d'un tag
+- **Créer et modifier des cartes** : Basique, Basique et inversée, Réponse à taper, Texte à trous
+  (bouton « Trou »), gras/italique/souligné, images et photos (réduites automatiquement)
+- **Parcourir** toutes les cartes : recherche (`tag:`, `deck:`, `is:new|learn|review|due|suspended`,
+  `-mot` pour exclure), filtres, et actions groupées (suspendre, réactiver, déplacer,
+  réinitialiser, supprimer)
+- **Statistiques** : révisions du jour, série de jours 🔥, taux de réussite sur 30 jours,
+  calendrier d'activité, prévision des révisions sur 30 jours, répartition des cartes
+- **Gestes tactiles** : toucher la carte pour la réponse, glisser à gauche « À revoir », à droite
+  « Correct »
+- **Lecture à voix haute** avec la voix de l'appareil (automatique ou bouton 🔊), langue réglable
+  par paquet ; les balises `{{tts …}}` des paquets Anki sont reconnues
+- **Rappels** sans serveur : rappel quotidien ajouté au Calendrier de l'appareil (fichier `.ics`)
+  et badge sur l'icône avec le nombre de cartes à revoir
+- **Hors ligne** : l'application démarre instantanément depuis le cache ; les mises à jour se
+  téléchargent en arrière-plan et s'appliquent à l'ouverture suivante
 - Raccourcis clavier : `Espace`/`Entrée` (afficher / Correct), `1`–`4` (noter), `R` (réécouter),
-  `U` (annuler), `S` (suspendre), `Échap` (retour)
-- Glisser-déposer d'un fichier `.apkg` sur la page
+  `T` (lire à voix haute), `E` (modifier), `U` (annuler), `S` (suspendre), `Échap` (retour)
 
 ## Installer l'application
 
@@ -63,10 +77,17 @@ Depuis Anki : *Fichier → Exporter → Paquet de cartes Anki (.apkg)*.
 | Fichier | Rôle |
 | --- | --- |
 | `index.html`, `styles.css` | Interface |
-| `js/app.js` | Écrans (accueil, révision, réglages) |
+| `js/app.js` | Accueil, import, réglages, options de paquet, révision personnalisée |
+| `js/study.js` | Écran de révision (gestes, voix, annulation) |
+| `js/editor.js` | Création et modification des notes |
+| `js/browse.js` | Navigateur de cartes |
+| `js/stats.js` | Statistiques |
+| `js/reminders.js` | Rappel Calendrier et badge |
+| `js/tts.js` | Lecture à voix haute |
+| `js/state.js`, `js/ui.js` | État partagé, limites quotidiennes, utilitaires d'interface |
 | `js/apkg.js` | Lecture des fichiers `.apkg` (zip + SQLite + zstd + protobuf) |
 | `js/template.js` | Moteur de modèles Anki (champs, cloze, saisie…) |
-| `js/scheduler.js` | Algorithme de répétition espacée |
+| `js/scheduler.js` | Algorithmes de répétition espacée (FSRS-5 et SM-2) |
 | `js/collection.js` | Import, paquets, compteurs du jour, médias |
 | `js/db.js` | Stockage IndexedDB |
 | `sw.js`, `manifest.webmanifest` | Mode hors ligne et installation |
@@ -76,6 +97,7 @@ Depuis Anki : *Fichier → Exporter → Paquet de cartes Anki (.apkg)*.
 
 - Pas de synchronisation avec AnkiWeb : la progression est stockée dans le navigateur de
   chaque appareil.
-- Pas d'éditeur de cartes : créez-les dans Anki puis importez-les.
+- Pas de vraies notifications « push » (elles demandent un serveur) : le rappel passe par le
+  Calendrier de l'appareil.
 - Le JavaScript des modèles de cartes s'exécute dans un cadre isolé (sans accès aux données
   de l'application).

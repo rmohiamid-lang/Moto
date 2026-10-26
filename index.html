@@ -10,6 +10,7 @@
   <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Moto">
   <meta name="mobile-web-app-capable" content="yes">
   <link rel="stylesheet" href="styles.css">
   <script src="vendor/jszip.min.js" defer></script>
@@ -21,10 +22,13 @@
   <!-- Accueil : liste des paquets -->
   <section id="home" class="view">
     <header class="topbar">
-      <h1 class="brand"><img src="icons/icon.svg" alt="" width="28" height="28"> Moto</h1>
+      <h1 class="brand"><img src="icons/icon.svg" alt="" width="28" height="28"> <span>Moto</span></h1>
       <div class="actions">
         <button id="btn-install" class="btn ghost" hidden>Installer</button>
-        <button id="btn-import" class="btn primary">Importer .apkg</button>
+        <button id="btn-add" class="btn" title="Ajouter des cartes">＋<span class="lbl"> Ajouter</span></button>
+        <button id="btn-browse" class="btn" title="Parcourir les cartes">🔍<span class="lbl"> Parcourir</span></button>
+        <button id="btn-stats" class="btn" title="Statistiques">📊<span class="lbl"> Stats</span></button>
+        <button id="btn-import" class="btn primary" title="Importer un paquet .apkg">⬇<span class="lbl"> Importer</span></button>
         <button id="btn-settings" class="btn icon" aria-label="Réglages" title="Réglages">⚙</button>
       </div>
     </header>
@@ -32,8 +36,8 @@
       <div id="deck-list"></div>
       <div id="empty" class="empty" hidden>
         <h2>Bienvenue !</h2>
-        <p>Importez un paquet Anki (<code>.apkg</code> ou <code>.colpkg</code>) pour commencer à réviser.
-          Vous pouvez aussi glisser-déposer le fichier sur cette page.</p>
+        <p>Importez un paquet Anki (<code>.apkg</code> ou <code>.colpkg</code>) ou créez vos propres cartes.
+          Vous pouvez aussi glisser-déposer un fichier sur cette page.</p>
         <p>Des milliers de paquets gratuits sont disponibles sur
           <a href="https://ankiweb.net/shared/decks" target="_blank" rel="noopener">AnkiWeb</a>.</p>
         <div class="row">
@@ -59,12 +63,15 @@
         </div>
       </div>
       <div class="actions">
+        <button id="btn-speak" class="btn icon" aria-label="Lire à voix haute" title="Lire à voix haute (T)">🔊</button>
+        <button id="btn-edit" class="btn icon" aria-label="Modifier la carte" title="Modifier (E)">✎</button>
         <button id="btn-undo" class="btn icon" aria-label="Annuler" title="Annuler (U)" disabled>↶</button>
         <button id="btn-suspend" class="btn icon" aria-label="Suspendre la carte" title="Suspendre la carte (S)">⏸</button>
       </div>
     </header>
     <main class="card-area">
       <iframe id="card-frame" title="Carte" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" allow="autoplay"></iframe>
+      <div id="swipe-flash" class="swipe-flash" hidden></div>
       <div id="done" class="done" hidden>
         <div class="done-icon">🎉</div>
         <h2>Félicitations !</h2>
@@ -83,17 +90,120 @@
     </footer>
   </section>
 
+  <!-- Navigateur de cartes -->
+  <section id="browse" class="view" hidden>
+    <header class="topbar">
+      <button id="br-back" class="btn icon" aria-label="Retour" title="Retour">←</button>
+      <h2 class="view-title">Parcourir</h2>
+      <span id="br-count" class="muted"></span>
+    </header>
+    <div class="toolbar-row">
+      <input id="br-search" type="search" placeholder="Rechercher… (ex. : chat, tag:vocab, deck:Anglais, is:due)" autocomplete="off">
+      <select id="br-deck" aria-label="Paquet"></select>
+      <select id="br-state" aria-label="État">
+        <option value="">Toutes les cartes</option>
+        <option value="new">Nouvelles</option>
+        <option value="learn">En apprentissage</option>
+        <option value="due">À revoir aujourd’hui</option>
+        <option value="review">En révision</option>
+        <option value="suspended">Suspendues</option>
+      </select>
+    </div>
+    <div class="toolbar-row selbar">
+      <label class="selall"><input type="checkbox" id="br-all"> <span id="br-selcount">Tout sélectionner</span></label>
+      <span class="spacer"></span>
+      <button class="btn small" data-bulk="suspend">Suspendre</button>
+      <button class="btn small" data-bulk="unsuspend">Réactiver</button>
+      <button class="btn small" data-bulk="move">Déplacer</button>
+      <button class="btn small" data-bulk="reset">Réinitialiser</button>
+      <button class="btn small danger" data-bulk="delete">Supprimer</button>
+    </div>
+    <main class="content wide">
+      <div id="br-list" class="br-list"></div>
+      <div class="center"><button id="br-more" class="btn" hidden>Afficher plus</button></div>
+    </main>
+  </section>
+
+  <!-- Statistiques -->
+  <section id="stats" class="view" hidden>
+    <header class="topbar">
+      <button id="st-back" class="btn icon" aria-label="Retour" title="Retour">←</button>
+      <h2 class="view-title">Statistiques</h2>
+      <select id="st-deck" aria-label="Paquet"></select>
+    </header>
+    <main class="content">
+      <div id="st-tiles" class="st-tiles"></div>
+      <section class="st-card">
+        <h3>Activité</h3>
+        <div id="st-heatmap"></div>
+      </section>
+      <section class="st-card">
+        <h3>Révisions prévues (30 jours)</h3>
+        <div id="st-forecast"></div>
+      </section>
+      <section class="st-card">
+        <h3>Répartition des cartes</h3>
+        <div id="st-breakdown"></div>
+      </section>
+    </main>
+  </section>
+
+  <!-- Éditeur de notes -->
+  <section id="editor" class="view" hidden>
+    <header class="topbar">
+      <button id="ed-cancel" class="btn icon" aria-label="Fermer" title="Fermer">←</button>
+      <h2 id="ed-title" class="view-title">Ajouter des cartes</h2>
+      <button id="ed-save" class="btn primary">Ajouter</button>
+    </header>
+    <main class="content">
+      <div class="ed-selects">
+        <label>Type <select id="ed-type"></select></label>
+        <label>Paquet <select id="ed-deck"></select></label>
+      </div>
+      <div class="ed-toolbar" role="toolbar" aria-label="Mise en forme">
+        <button type="button" class="btn small" data-cmd="bold" title="Gras"><b>G</b></button>
+        <button type="button" class="btn small" data-cmd="italic" title="Italique"><i>I</i></button>
+        <button type="button" class="btn small" data-cmd="underline" title="Souligné"><u>S</u></button>
+        <button type="button" class="btn small" data-cmd="cloze" id="ed-cloze" title="Créer un trou (Ctrl+Maj+C)">[…] Trou</button>
+        <button type="button" class="btn small" data-cmd="image" title="Ajouter une image ou une photo">🖼 Image</button>
+        <button type="button" class="btn small" data-cmd="removeFormat" title="Effacer la mise en forme">⌫ Format</button>
+      </div>
+      <div id="ed-fields"></div>
+      <label class="ed-tags">Tags <input id="ed-tags" type="text" placeholder="séparés par des espaces" autocapitalize="off"></label>
+      <p id="ed-cards-info" class="muted"></p>
+      <button id="ed-delete" class="btn danger" hidden>Supprimer la note</button>
+      <input id="ed-image" type="file" accept="image/*" hidden>
+    </main>
+  </section>
+
   <!-- Réglages -->
   <dialog id="settings-dialog">
     <form id="settings-form" method="dialog">
       <h2>Réglages</h2>
+      <h3>Limites quotidiennes</h3>
       <label>Nouvelles cartes par jour <input name="newPerDay" type="number" min="0" max="9999" required></label>
       <label>Révisions maximum par jour <input name="reviewsPerDay" type="number" min="0" max="99999" required></label>
-      <label>Étapes d’apprentissage (minutes) <input name="learnSteps" type="text" pattern="[0-9., ]*" placeholder="1 10"></label>
-      <label>Étapes de réapprentissage (minutes) <input name="relearnSteps" type="text" pattern="[0-9., ]*" placeholder="10"></label>
-      <label>Intervalle après réussite (jours) <input name="graduatingIvl" type="number" min="1" max="365" required></label>
-      <label>Intervalle « Facile » (jours) <input name="easyIvl" type="number" min="1" max="365" required></label>
-      <label>Début de la journée (heure) <input name="dayStartHour" type="number" min="0" max="23" required></label>
+      <p class="muted small">Chaque paquet peut avoir ses propres limites (menu ⋮ → Options du paquet).</p>
+
+      <h3>Algorithme</h3>
+      <label>Algorithme
+        <select name="algorithm">
+          <option value="fsrs">FSRS (recommandé)</option>
+          <option value="sm2">SM-2 (classique)</option>
+        </select>
+      </label>
+      <div id="fsrs-settings">
+        <label>Rétention visée (%) <input name="retention" type="number" min="70" max="99" required></label>
+        <p class="muted small">Pourcentage de cartes que vous voulez retenir. Plus il est haut, plus il y a de révisions.</p>
+      </div>
+      <label>Étapes d’apprentissage (min) <input name="learnSteps" type="text" inputmode="decimal" placeholder="1 10"></label>
+      <label>Étapes de réapprentissage (min) <input name="relearnSteps" type="text" inputmode="decimal" placeholder="10"></label>
+      <div id="sm2-settings">
+        <label>Intervalle après réussite (j) <input name="graduatingIvl" type="number" min="1" max="365" required></label>
+        <label>Intervalle « Facile » (j) <input name="easyIvl" type="number" min="1" max="365" required></label>
+      </div>
+
+      <h3>Affichage</h3>
       <label>Thème
         <select name="theme">
           <option value="auto">Automatique</option>
@@ -101,12 +211,80 @@
           <option value="dark">Sombre</option>
         </select>
       </label>
-      <p id="storage-info" class="muted"></p>
-      <div class="row end">
+      <label>Début de la journée (heure) <input name="dayStartHour" type="number" min="0" max="23" required></label>
+      <label class="check">Gestes tactiles <input name="gestures" type="checkbox"></label>
+      <p class="muted small">Toucher la carte pour voir la réponse, glisser à gauche pour « À revoir », à droite pour « Correct ».</p>
+
+      <div id="tts-settings">
+        <h3>Voix</h3>
+        <label class="check">Lire les cartes automatiquement <input name="autoTts" type="checkbox"></label>
+        <label>Langue de la voix <select name="ttsLang"></select></label>
+      </div>
+
+      <h3>Rappels</h3>
+      <label>Heure du rappel quotidien <input name="reminderTime" type="time"></label>
+      <div class="row">
+        <button type="button" id="btn-reminder" class="btn">📅 Ajouter au Calendrier</button>
+        <button type="button" id="btn-badge" class="btn">🔴 Badge sur l’icône</button>
+      </div>
+      <p class="muted small">Le Calendrier de l’appareil vous enverra une notification chaque jour à cette heure.</p>
+
+      <h3>Données</h3>
+      <p id="storage-info" class="muted small"></p>
+      <div class="row end sticky-actions">
         <button type="button" id="btn-wipe" class="btn danger">Tout effacer</button>
         <span class="spacer"></span>
         <button value="cancel" formnovalidate class="btn">Annuler</button>
         <button value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Options d'un paquet -->
+  <dialog id="deck-options-dialog">
+    <form id="deck-options-form" method="dialog">
+      <h2>Options du paquet</h2>
+      <p id="deck-options-title" class="muted"></p>
+      <label>Nouvelles cartes par jour <input name="newPerDay" type="number" min="0" max="9999"></label>
+      <label>Révisions maximum par jour <input name="reviewsPerDay" type="number" min="0" max="99999"></label>
+      <label>Langue de la voix <select name="ttsLang"></select></label>
+      <p class="muted small">Laissez vide pour utiliser les réglages généraux.</p>
+      <div class="row end">
+        <button value="cancel" formnovalidate class="btn">Annuler</button>
+        <button value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Révision personnalisée -->
+  <dialog id="custom-study-dialog">
+    <form id="custom-study-form" method="dialog">
+      <h2>Révision personnalisée</h2>
+      <p id="custom-study-title" class="muted"></p>
+      <label class="radio"><input type="radio" name="mode" value="extraNew" checked> Ajouter des nouvelles cartes aujourd’hui
+        <input name="extraNew" type="number" min="1" max="9999" value="10" data-for="extraNew"></label>
+      <label class="radio"><input type="radio" name="mode" value="extraReview"> Augmenter la limite de révisions
+        <input name="extraReview" type="number" min="1" max="99999" value="50" data-for="extraReview"></label>
+      <label class="radio"><input type="radio" name="mode" value="forgotten"> Revoir les cartes oubliées aujourd’hui</label>
+      <label class="radio"><input type="radio" name="mode" value="ahead"> Réviser en avance (jours)
+        <input name="ahead" type="number" min="1" max="365" value="7" data-for="ahead"></label>
+      <label class="radio"><input type="radio" name="mode" value="tag"> Étudier un tag
+        <select name="tag" data-for="tag"></select></label>
+      <div class="row end">
+        <button value="cancel" formnovalidate class="btn">Annuler</button>
+        <button value="go" class="btn primary">Commencer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Déplacer des cartes -->
+  <dialog id="move-dialog">
+    <form method="dialog">
+      <h2>Déplacer vers…</h2>
+      <label>Paquet <select id="move-deck"></select></label>
+      <div class="row end">
+        <button value="cancel" class="btn">Annuler</button>
+        <button value="ok" class="btn primary">Déplacer</button>
       </div>
     </form>
   </dialog>

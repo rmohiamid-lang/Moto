@@ -89,9 +89,24 @@ function applyFilter(filter, value, ctx, fieldName) {
     case 'kana': return furigana(value, (base, ruby) => ruby);
     case 'kanji': return furigana(value, (base) => base);
     default:
-      // tts, filtres d'extensions inconnus… : on garde le contenu tel quel.
+      // {{tts fr_FR:Champ}} : on note la langue pour la lecture à voix haute.
+      if (f.startsWith('tts ')) return ttsSpan(filter.slice(4).trim().split(/\s+/)[0], value);
+      // Filtres d'extensions inconnus : on garde le contenu tel quel.
       return value;
   }
+}
+
+// Comme dans Anki, le texte à lire n'est pas affiché : il sert à la lecture à voix haute.
+function ttsSpan(lang, html) {
+  return `<span class="tts-text" data-tts-lang="${escapeHtml(lang.replace('_', '-'))}" hidden>${html}</span>`;
+}
+
+// Balises [anki:tts lang=fr_FR]…[/anki:tts] présentes dans certains paquets.
+function ankiTtsTags(html) {
+  return html.replace(/\[anki:tts([^\]]*)\]([\s\S]*?)\[\/anki:tts\]/g, (_, attrs, text) => {
+    const lang = /lang=([\w-]+)/.exec(attrs);
+    return lang ? ttsSpan(lang[1], text) : text;
+  });
 }
 
 function furigana(value, fn) {
@@ -239,10 +254,10 @@ export function renderCard({ notetype, note, card, deckName, typed }) {
     typed,
   };
   const qCtx = { ...ctx, side: 'q' };
-  const question = renderNodes(parseTemplate(tmpl.qfmt).children, qCtx);
-  const answer = renderNodes(parseTemplate(tmpl.afmt).children, {
+  const question = ankiTtsTags(renderNodes(parseTemplate(tmpl.qfmt).children, qCtx));
+  const answer = ankiTtsTags(renderNodes(parseTemplate(tmpl.afmt).children, {
     ...ctx, side: 'a', frontSide: stripTypeInput(question),
-  });
+  }));
   return { question, answer, expectsTyping: !!qCtx.expectsTyping };
 }
 
