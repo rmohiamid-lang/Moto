@@ -70,7 +70,7 @@ Depuis Anki : *Fichier → Exporter → Paquet de cartes Anki (.apkg)*.
 | `js/collection.js` | Import, paquets, compteurs du jour, médias |
 | `js/db.js` | Stockage IndexedDB |
 | `sw.js`, `manifest.webmanifest` | Mode hors ligne et installation |
-| `vendor/` | [sql.js](https://github.com/sql-js/sql.js) 1.12.0, [JSZip](https://stuk.github.io/jszip/) 3.10.1, [fzstd](https://github.com/101arrowz/fzstd) 0.1.1 |
+| `vendor/` (licences dans `vendor/THIRD_PARTY_LICENSES.txt`) | [sql.js](https://github.com/sql-js/sql.js) 1.12.0, [JSZip](https://stuk.github.io/jszip/) 3.10.1, [fzstd](https://github.com/101arrowz/fzstd) 0.1.1 |
 
 ## Limites
 
