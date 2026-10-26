@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Moto Flashcards</title>
+  <meta name="description" content="Révisez vos paquets Anki (.apkg) hors ligne, avec la répétition espacée.">
+  <meta name="theme-color" content="#2563eb">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="stylesheet" href="styles.css">
+  <script src="vendor/jszip.min.js" defer></script>
+  <script src="vendor/fzstd.js" defer></script>
+  <script src="vendor/sql-wasm.js" defer></script>
+  <script type="module" src="js/app.js"></script>
+</head>
+<body>
+  <!-- Accueil : liste des paquets -->
+  <section id="home" class="view">
+    <header class="topbar">
+      <h1 class="brand"><img src="icons/icon.svg" alt="" width="28" height="28"> Moto</h1>
+      <div class="actions">
+        <button id="btn-install" class="btn ghost" hidden>Installer</button>
+        <button id="btn-import" class="btn primary">Importer .apkg</button>
+        <button id="btn-settings" class="btn icon" aria-label="Réglages" title="Réglages">⚙</button>
+      </div>
+    </header>
+    <main class="content">
+      <div id="deck-list"></div>
+      <div id="empty" class="empty" hidden>
+        <h2>Bienvenue !</h2>
+        <p>Importez un paquet Anki (<code>.apkg</code> ou <code>.colpkg</code>) pour commencer à réviser.
+          Vous pouvez aussi glisser-déposer le fichier sur cette page.</p>
+        <p>Des milliers de paquets gratuits sont disponibles sur
+          <a href="https://ankiweb.net/shared/decks" target="_blank" rel="noopener">AnkiWeb</a>.</p>
+        <div class="row">
+          <button id="btn-import-empty" class="btn primary">Importer un paquet</button>
+          <button id="btn-sample" class="btn">Essayer un paquet d’exemple</button>
+        </div>
+      </div>
+      <p id="today-stats" class="muted center"></p>
+    </main>
+    <input id="file-input" type="file" accept=".apkg,.colpkg,.zip" multiple hidden>
+  </section>
+
+  <!-- Révision -->
+  <section id="study" class="view" hidden>
+    <header class="topbar">
+      <button id="btn-back" class="btn icon" aria-label="Retour" title="Retour (Échap)">←</button>
+      <div class="study-title">
+        <div id="study-deck" class="deck-name"></div>
+        <div class="counts">
+          <span id="cnt-new" class="c-new"></span>
+          <span id="cnt-learn" class="c-learn"></span>
+          <span id="cnt-review" class="c-review"></span>
+        </div>
+      </div>
+      <div class="actions">
+        <button id="btn-undo" class="btn icon" aria-label="Annuler" title="Annuler (U)" disabled>↶</button>
+        <button id="btn-suspend" class="btn icon" aria-label="Suspendre la carte" title="Suspendre la carte (S)">⏸</button>
+      </div>
+    </header>
+    <main class="card-area">
+      <iframe id="card-frame" title="Carte" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" allow="autoplay"></iframe>
+      <div id="done" class="done" hidden>
+        <div class="done-icon">🎉</div>
+        <h2>Félicitations !</h2>
+        <p id="done-text">Vous avez terminé ce paquet pour le moment.</p>
+        <button id="btn-done-back" class="btn primary">Retour aux paquets</button>
+      </div>
+    </main>
+    <footer class="answer-bar">
+      <button id="btn-show" class="btn primary big">Afficher la réponse</button>
+      <div id="ratings" class="ratings" hidden>
+        <button class="btn rate again" data-rating="1"><small data-ivl="1"></small>À revoir</button>
+        <button class="btn rate hard" data-rating="2"><small data-ivl="2"></small>Difficile</button>
+        <button class="btn rate good" data-rating="3"><small data-ivl="3"></small>Correct</button>
+        <button class="btn rate easy" data-rating="4"><small data-ivl="4"></small>Facile</button>
+      </div>
+    </footer>
+  </section>
+
+  <!-- Réglages -->
+  <dialog id="settings-dialog">
+    <form id="settings-form" method="dialog">
+      <h2>Réglages</h2>
+      <label>Nouvelles cartes par jour <input name="newPerDay" type="number" min="0" max="9999" required></label>
+      <label>Révisions maximum par jour <input name="reviewsPerDay" type="number" min="0" max="99999" required></label>
+      <label>Étapes d’apprentissage (minutes) <input name="learnSteps" type="text" pattern="[0-9., ]*" placeholder="1 10"></label>
+      <label>Étapes de réapprentissage (minutes) <input name="relearnSteps" type="text" pattern="[0-9., ]*" placeholder="10"></label>
+      <label>Intervalle après réussite (jours) <input name="graduatingIvl" type="number" min="1" max="365" required></label>
+      <label>Intervalle « Facile » (jours) <input name="easyIvl" type="number" min="1" max="365" required></label>
+      <label>Début de la journée (heure) <input name="dayStartHour" type="number" min="0" max="23" required></label>
+      <label>Thème
+        <select name="theme">
+          <option value="auto">Automatique</option>
+          <option value="light">Clair</option>
+          <option value="dark">Sombre</option>
+        </select>
+      </label>
+      <p id="storage-info" class="muted"></p>
+      <div class="row end">
+        <button type="button" id="btn-wipe" class="btn danger">Tout effacer</button>
+        <span class="spacer"></span>
+        <button value="cancel" formnovalidate class="btn">Annuler</button>
+        <button value="save" class="btn primary">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Progression de l'import -->
+  <dialog id="progress-dialog">
+    <p id="progress-text">Importation…</p>
+    <progress id="progress-bar" max="1" value="0"></progress>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="drop-hint" class="drop-hint" hidden>Déposez le fichier .apkg pour l’importer</div>
+</body>
+</html>
