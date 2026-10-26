@@ -2,7 +2,7 @@ name: Déployer sur GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, claude/anki-flashcard-app-vct853]
   workflow_dispatch:
 
 permissions:

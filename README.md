@@ -28,7 +28,8 @@ s'installe comme une vraie application (icône sur l'écran d'accueil, plein éc
 
 ### 1. Mettre l'application en ligne (une seule fois)
 
-1. Fusionnez cette branche dans `main`.
+1. Le dépôt doit être **public** (GitHub Pages est payant pour les dépôts privés) :
+   **Settings → General → Danger Zone → Change visibility → Public**.
 2. Sur GitHub : **Settings → Pages → Build and deployment → Source : GitHub Actions**.
 3. Le workflow « Déployer sur GitHub Pages » publie l'application à l'adresse
    `https://<votre-utilisateur>.github.io/Moto/`.
@@ -37,7 +38,9 @@ s'installe comme une vraie application (icône sur l'écran d'accueil, plein éc
 
 - **Android (Chrome)** : ouvrez l'adresse, puis menu ⋮ → *Installer l'application*
   (ou le bouton « Installer » dans l'application).
-- **iPhone / iPad (Safari)** : bouton Partager → *Sur l'écran d'accueil*.
+- **iPhone / iPad (Safari)** : bouton Partager → *Sur l'écran d'accueil*. Utilisez toujours
+  l'icône de l'écran d'accueil : Safari peut effacer les données d'un simple site après
+  7 jours sans visite, mais pas celles d'une application ajoutée à l'écran d'accueil.
 - **Ordinateur (Chrome / Edge)** : icône d'installation dans la barre d'adresse.
   Une fois installée, l'application peut ouvrir directement les fichiers `.apkg`.
 
